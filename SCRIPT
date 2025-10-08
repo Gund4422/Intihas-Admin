@@ -1,0 +1,161 @@
+--!strict
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+-- Clear old GUIs
+for _, gui in pairs(playerGui:GetChildren()) do
+    if gui.Name == "IntihaAdminGUI" then
+        gui:Destroy()
+    end
+end
+
+-- Main GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "IntihaAdminGUI"
+screenGui.Parent = playerGui
+
+-- Command Bar
+local commandBar = Instance.new("TextBox", screenGui)
+commandBar.Size = UDim2.new(0, 400, 0, 30)
+commandBar.Position = UDim2.new(0, 50, 0, 50)
+commandBar.PlaceholderText = "Enter command (e.g., :fly, :speed 50)"
+commandBar.TextColor3 = Color3.fromRGB(0,255,128)
+commandBar.BackgroundColor3 = Color3.fromRGB(30,30,40)
+commandBar.Font = Enum.Font.Code
+commandBar.TextScaled = true
+commandBar.ClearTextOnFocus = true
+commandBar.BorderSizePixel = 0
+commandBar.TextWrapped = false
+
+-- Admin State
+local flyEnabled = false
+local speedValue = 16
+local espEnabled = false
+
+-- Commands table
+local commands: {[string]: (args: string) -> ()} = {}
+
+-- Helper to add commands
+local function addCmd(name: string, func: (args: string) -> ())
+    commands[name] = func
+end
+
+-- Built-in Commands
+addCmd("fly", function(args)
+    flyEnabled = not flyEnabled
+    if flyEnabled then
+        print("Fly enabled")
+        if player.Character and player.Character.PrimaryPart then
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Name = "IntihaFly"
+            bodyVelocity.MaxForce = Vector3.new(1e5,1e5,1e5)
+            bodyVelocity.Velocity = Vector3.new(0,0,0)
+            bodyVelocity.Parent = player.Character.PrimaryPart
+        end
+    else
+        print("Fly disabled")
+        if player.Character and player.Character.PrimaryPart then
+            local vel = player.Character.PrimaryPart:FindFirstChild("IntihaFly")
+            if vel then vel:Destroy() end
+        end
+    end
+end)
+
+addCmd("speed", function(args)
+    local num = tonumber(args)
+    if num and player.Character and player.Character:FindFirstChild("Humanoid") then
+        speedValue = num
+        player.Character.Humanoid.WalkSpeed = speedValue
+        print("WalkSpeed set to", speedValue)
+    end
+end)
+
+addCmd("jump", function(args)
+    local num = tonumber(args)
+    if num and player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.JumpPower = num
+        print("JumpPower set to", num)
+    end
+end)
+
+addCmd("esp", function(args)
+    espEnabled = not espEnabled
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local highlight = plr.Character:FindFirstChild("IntihaESP")
+            if espEnabled then
+                if not highlight then
+                    local h = Instance.new("Highlight")
+                    h.Name = "IntihaESP"
+                    h.Adornee = plr.Character
+                    h.FillColor = Color3.fromRGB(0,255,128)
+                    h.OutlineColor = Color3.fromRGB(255,255,255)
+                    h.Parent = plr.Character
+                end
+            else
+                if highlight then highlight:Destroy() end
+            end
+        end
+    end
+end)
+
+-- Command handler
+commandBar.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local text = commandBar.Text
+        if text:sub(1,1) == ":" then
+            local space = text:find(" ")
+            local cmd = ""
+            local args = ""
+            if space then
+                cmd = text:sub(2,space-1)
+                args = text:sub(space+1)
+            else
+                cmd = text:sub(2)
+            end
+            if commands[cmd] then
+                commands[cmd](args)
+            else
+                print("Unknown command:", cmd)
+            end
+        end
+        commandBar.Text = ""
+    end
+end)
+
+-- Fly updater
+RunService.RenderStepped:Connect(function()
+    if flyEnabled and player.Character and player.Character.PrimaryPart then
+        local vel = player.Character.PrimaryPart:FindFirstChild("IntihaFly")
+        if vel then
+            local cam = workspace.CurrentCamera
+            vel.Velocity = (cam.CFrame.LookVector + Vector3.new(0,0.5,0)) * speedValue
+        end
+    end
+end)
+
+-- Example: Adding new commands easily
+addCmd("teleport", function(args)
+    local plr = Players:FindFirstChild(args)
+    if plr and plr.Character and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = plr.Character.HumanoidRootPart.CFrame + Vector3.new(0,5,0)
+        print("Teleported to", args)
+    else
+        print("Player not found:", args)
+    end
+end)
+
+addCmd("rainbow", function(args)
+    local light = workspace:FindFirstChildOfClass("Lighting")
+    if light then
+        spawn(function()
+            while true do
+                light.Ambient = Color3.fromHSV(tick()%1,1,1)
+                task.wait(0.05)
+            end
+        end)
+    end
+end)
